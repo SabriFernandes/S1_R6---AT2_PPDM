@@ -1,352 +1,320 @@
-import React, { useState, useEffect, useRef } from "react";
-import {View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image} from "react-native";
+import React, { useState, useRef } from 'react';
+import {View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator} from 'react-native';
 
-import * as Location from "expo-location";
-import { CameraView, useCameraPermissions } from "expo-camera";
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as Location from 'expo-location';
 
-export default function GpsScreen() {
-    const [location, setLocation] = useState(null);
-    const [errorMsg, setErrorMsg] = useState(null);
-    const [loading, setLoading] = useState(false);
-
-    // Permissão da câmera
+export default function App() {
     const [cameraPermission, requestCameraPermission] =
         useCameraPermissions();
 
-    // Referência da câmera
+    const [location, setLocation] = useState(null);
+    const [photo, setPhoto] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [errorMsg, setErrorMsg] = useState('');
+
     const cameraRef = useRef(null);
 
-    // Foto capturada
-    const [capturedPhoto, setCapturedPhoto] = useState(null);
+    // CAPTURAR LOCALIZAÇÃO
 
-    // Captura a localização atual
-    const fetchCurrentLocation = async () => {
-
+    async function getLocation() {
         try {
             setLoading(true);
-            setErrorMsg(null);
+            setErrorMsg('');
 
-            // Solicita permissão para localização
-            let { status } =
+            const { status } =
                 await Location.requestForegroundPermissionsAsync();
-            if (status !== "granted") {
+
+            if (status !== 'granted') {
                 setErrorMsg(
-                    "A permissão para acesso à localização foi negada."
+                    'Permissão de localização negada.'
                 );
                 setLoading(false);
-                return;
+                return null;
             }
-            // Obtém a localização atual
-            let currentLocation =
+
+            const currentLocation =
                 await Location.getCurrentPositionAsync({
-                    accuracy: Location.Accuracy.High
+                    accuracy: Location.Accuracy.High,
                 });
 
             setLocation(currentLocation);
 
+            return currentLocation;
+
         } catch (error) {
             setErrorMsg(
-                "Não foi possível obter a localização."
+                'Não foi possível obter a localização.'
             );
+
+            return null;
 
         } finally {
             setLoading(false);
-
         }
-    };
-    // Tira a foto
-    const takePicture = async () => {
+    }
+
+    // TIRAR FOTO
+
+    async function takePicture() {
+        if (!cameraRef.current) {
+            return;
+        }
 
         try {
+            setErrorMsg('');
 
-            if (!cameraRef.current) {
+            // Obtém a localização antes de tirar a foto
+            const currentLocation = location || await getLocation();
+
+            if (!currentLocation) {
                 return;
             }
-            // Verifica se existe localização
-            if (!location) {
-                setErrorMsg(
-                    "Primeiro capture a localização."
-                );
-                return;
-            }
-            const photo =
+
+            const result =
                 await cameraRef.current.takePictureAsync();
-            setCapturedPhoto(photo.uri);
+
+            setPhoto({
+                uri: result.uri,
+                latitude: currentLocation.coords.latitude,
+                longitude: currentLocation.coords.longitude,
+            });
 
         } catch (error) {
             setErrorMsg(
-                "Não foi possível tirar a foto."
+                'Não foi possível tirar a foto.'
             );
         }
-    };
-    // Enquanto a permissão da câmera está carregando
+    }
+
+    // PERMISSÃO DA CÂMERA
+
     if (!cameraPermission) {
         return (
-            <View style={styles.container}>
+            <View style={styles.center}>
                 <ActivityIndicator size="large" />
             </View>
         );
     }
 
-    // Caso a câmera não tenha permissão
     if (!cameraPermission.granted) {
         return (
-            <View style={styles.permissionContainer}>
-                <Text style={styles.permissionText}>
-                    Precisamos da sua permissão para acessar a câmera.
+            <View style={styles.center}>
+                <Text style={styles.title}>
+                    Permissão da câmera
                 </Text>
+
+                <Text style={styles.text}>
+                    Precisamos acessar a câmera para tirar
+                    uma foto do local.
+                </Text>
+
                 <TouchableOpacity
-                    style={styles.permissionButton}
+                    style={styles.button}
                     onPress={requestCameraPermission}
                 >
                     <Text style={styles.buttonText}>
-                        Conceder Permissão da Câmera
+                        Permitir câmera
                     </Text>
                 </TouchableOpacity>
             </View>
         );
     }
 
+    // FOTO CAPTURADA
+    if (photo) {
+        return (
+            <View style={styles.container}>
+
+                <View style={styles.photoContainer}>
+
+                    <Image
+                        source={{ uri: photo.uri }}
+                        style={styles.photo}
+                    />
+
+                    {/* COORDENADAS SOBRE A FOTO */}
+                    <View style={styles.coordinates}>
+                        <Text style={styles.coordinateText}>
+                            Latitude: {photo.latitude.toFixed(6)}
+                        </Text>
+
+                        <Text style={styles.coordinateText}>
+                            Longitude: {photo.longitude.toFixed(6)}
+                        </Text>
+                    </View>
+                </View>
+                <TouchableOpacity
+                    style={styles.button}
+                    onPress={() => setPhoto(null)}
+                >
+                    <Text style={styles.buttonText}>
+                        Tirar outra foto
+                    </Text>
+                </TouchableOpacity>
+
+            </View>
+        );
+    }
+
+    // CÂMERA
+
     return (
         <View style={styles.container}>
-            <Text style={styles.headerTitle}>
-                Rastreamento do GPS
+
+            <Text style={styles.title}>
+                Localização e Foto
             </Text>
 
-
-            {/* CÂMERA OU FOTO */}
-
-            {capturedPhoto ? (
-                <View style={styles.previewContainer}>
-                    <Image
-                        source={{ uri: capturedPhoto }}
-                        style={styles.previewImage}
-                    />
-                    {/* Coordenadas sobre a foto */}
-
-                    {location && (
-                        <View style={styles.coordinatesOverlay}>
-
-                            <Text style={styles.overlayText}>
-                                Latitude:{" "}
-                                {location.coords.latitude.toFixed(6)}
-                            </Text>
-                            <Text style={styles.overlayText}>
-                                Longitude:{" "}
-                                {location.coords.longitude.toFixed(6)}
-                            </Text>
-                        </View>
-
-                    )}
-
-                    <TouchableOpacity
-                        style={styles.retryButton}
-                        onPress={() => setCapturedPhoto(null)}
-                    >
-                        <Text style={styles.buttonText}>
-                            Tirar outra foto
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-
-            ) : (
-
-                <>
-                    <CameraView
-                        ref={cameraRef}
-                        style={styles.camera}
-                        facing="back"
-                    />
-                    <TouchableOpacity
-                        style={styles.captureButton}
-                        onPress={takePicture}
-                    >
-                        <Text style={styles.buttonText}>
-                            Tirar Foto
-                        </Text>
-                    </TouchableOpacity>
-                </>
-
-            )}
-
-            {/* BOTÃO DO GPS */}
-            <TouchableOpacity
-                style={styles.fetchCurrentLocation}
-                onPress={fetchCurrentLocation}
-            >
-                <Text style={styles.buttonText}>
-                    Capturar coordenada
-                </Text>
-
-            </TouchableOpacity>
-            {/* CARREGANDO */}
+            <CameraView
+                ref={cameraRef}
+                style={styles.camera}
+                facing="back"
+            />
 
             {loading && (
                 <ActivityIndicator
                     size="large"
-                    style={{ marginTop: 20 }}
+                    style={styles.loading}
                 />
-
             )}
-            {/* ERRO */}
 
-            {errorMsg && (
-
-                <Text style={styles.errorText}>
+            {errorMsg !== '' && (
+                <Text style={styles.error}>
                     {errorMsg}
                 </Text>
-
             )}
 
-
-            {/* INFORMAÇÕES DA LOCALIZAÇÃO */}
-
             {location && (
+                <View style={styles.locationCard}>
 
-                <View style={styles.card}>
-                    <Text style={styles.label}>
-                        Latitude
-                    </Text>
-                    <Text>
-                        {location.coords.latitude}
-                    </Text>
-                    <Text style={styles.label}>
-                        Longitude
-                    </Text>
-                    <Text>
-                        {location.coords.longitude}
-                    </Text>
-                    <Text style={styles.label}>
-                        Precisão
+                    <Text style={styles.locationText}>
+                        Latitude:{' '}
+                        {location.coords.latitude.toFixed(6)}
                     </Text>
 
-                    <Text>
-                        {location.coords.accuracy}
+                    <Text style={styles.locationText}>
+                        Longitude:{' '}
+                        {location.coords.longitude.toFixed(6)}
                     </Text>
 
                 </View>
-
             )}
+
+            <TouchableOpacity
+                style={styles.button}
+                onPress={takePicture}
+                disabled={loading}
+            >
+                <Text style={styles.buttonText}>
+                    Tirar foto
+                </Text>
+            </TouchableOpacity>
 
         </View>
     );
 }
 
 
+// ESTILOS
+
 const styles = StyleSheet.create({
 
     container: {
         flex: 1,
-        backgroundColor: "#F8F5F0",
+        backgroundColor: '#fff',
         padding: 20,
     },
 
-    headerTitle: {
+    center: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+
+    title: {
         fontSize: 24,
-        fontWeight: "bold",
-        textAlign: "center",
+        fontWeight: 'bold',
+        textAlign: 'center',
         marginBottom: 15,
+    },
+
+    text: {
+        fontSize: 16,
+        textAlign: 'center',
+        marginBottom: 20,
     },
 
     camera: {
         flex: 1,
         borderRadius: 10,
-        overflow: "hidden",
+        overflow: 'hidden',
     },
 
-    captureButton: {
-        backgroundColor: "#2196F3",
+    button: {
+        backgroundColor: '#2196F3',
         padding: 15,
-        marginTop: 10,
         borderRadius: 10,
-        alignItems: "center",
-    },
-
-    fetchCurrentLocation: {
-        backgroundColor: "#1E3A5F",
-        padding: 15,
-        marginTop: 10,
-        borderRadius: 10,
-        alignItems: "center",
-    },
-
-    retryButton: {
-        backgroundColor: "#4CAF50",
-        padding: 15,
-        marginTop: 10,
-        borderRadius: 10,
-        alignItems: "center",
+        alignItems: 'center',
+        marginTop: 15,
     },
 
     buttonText: {
-        color: "#fff",
+        color: '#fff',
         fontSize: 16,
-        fontWeight: "bold",
+        fontWeight: 'bold',
     },
 
-    errorText: {
-        color: "#c13535",
-        textAlign: "center",
-        marginTop: 15,
+    loading: {
+        margin: 15,
     },
 
-    card: {
-        backgroundColor: "#fff",
-        padding: 15,
-        marginTop: 15,
-        borderRadius: 10,
+    error: {
+        color: '#c13535',
+        textAlign: 'center',
+        marginTop: 10,
     },
 
-    label: {
-        fontSize: 16,
-        fontWeight: "bold",
-        marginTop: 5,
-    },
-
-    permissionContainer: {
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        padding: 20,
-    },
-
-    permissionText: {
-        textAlign: "center",
-        marginBottom: 20,
-        fontSize: 16,
-    },
-
-    permissionButton: {
-        backgroundColor: "#2196F3",
-        padding: 15,
-        borderRadius: 10,
-    },
-
-    previewContainer: {
-        flex: 1,
-        position: "relative",
-    },
-
-    previewImage: {
-        flex: 1,
-        width: "100%",
-        borderRadius: 10,
-    },
-
-    coordinatesOverlay: {
-        position: "absolute",
-        bottom: 80,
-        left: 10,
-        right: 10,
-        backgroundColor: "rgba(0, 0, 0, 0.65)",
-        padding: 12,
+    locationCard: {
+        padding: 10,
+        marginTop: 10,
+        backgroundColor: '#eee',
         borderRadius: 8,
     },
 
-    overlayText: {
-        color: "#fff",
+    locationText: {
+        fontSize: 15,
+        marginBottom: 5,
+    },
+
+    photoContainer: {
+        flex: 1,
+        position: 'relative',
+    },
+
+    photo: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
+        borderRadius: 10,
+    },
+
+    coordinates: {
+        position: 'absolute',
+        bottom: 20,
+        left: 10,
+        right: 10,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        padding: 10,
+        borderRadius: 8,
+    },
+
+    coordinateText: {
+        color: '#fff',
         fontSize: 16,
-        fontWeight: "bold",
+        fontWeight: 'bold',
+        textAlign: 'center',
     },
 
 });
